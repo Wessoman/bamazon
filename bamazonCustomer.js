@@ -90,6 +90,7 @@ function buyProduct() {
                         // adds new sale to previous department sales
                         var newDptSales = dptSales + total;
                         // updates total sales
+                
                         connection.query("UPDATE departments SET ? WHERE ?", [{
                             total_sales: newDptSales
                         }, {
