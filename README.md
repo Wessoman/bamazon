@@ -5,5 +5,5 @@ Release History
 .01-.10 Engine testing and conceptualization
 .11 Initial Readme
 .12-15 SQL Revisions
-.16 Engine 1, Package Updated
-.17 Engine 1 testing
+.16-17 Engine 1 Testing, Package Updated
+.18 Test Code for Manager module
