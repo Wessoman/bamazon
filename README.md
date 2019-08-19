@@ -11,3 +11,4 @@ Release History
 .23 MVP Achieved
 .24 New SQL Update
 .25 Example Testing 1
+.27 Code Cleanup
