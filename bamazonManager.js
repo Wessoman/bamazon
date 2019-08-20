@@ -63,13 +63,13 @@ function buyProduct() {
     }]).then(function(answers) {
         // selects quantity of item user specified in prompt above
         connection.query("SELECT stock_quantity FROM products WHERE item_id = ?", [answers.product_id], function(err, res) {
-            // there is not enough in stock to fulfill purchase
+            // in the case where there is not enough in stock to fulfill purchase
             if (answers.quantity > res[0].stock_quantity) {
                 console.log("Insufficient quantity!");
                 // restarts function to buy items
                 buyProduct();
             } else {
-                // there is enough in stock to fulfill purchase
+                // in the case where there is enough in stock to fulfill purchase
                 var newQty = res[0].stock_quantity - answers.quantity;
                 // select info from products about product specified by user
                 connection.query("SELECT * FROM products WHERE item_id = ?", [answers.product_id], function(err, res) {
