@@ -1,25 +1,40 @@
-//dependencies
+// Initializes the npm packages used
 var mysql = require("mysql");
 var inquirer = require("inquirer");
-//var password = require("./password.js");
-var Table = require("cli-table");
+var table = require("cli-table");
 
-//database connection info
+// Initializes the connection variable to sync with a MySQL database
 var connection = mysql.createConnection({
-    host: "localhost",
-    port: 3306,
-    user: "root",
-    password: "Child123!",
-    database: "bamazon_db"
+  host: "localhost",
+
+  // Your port; if not 3306
+  port: 3306,
+
+  // Your username
+  user: "root",
+
+  // Your password
+  password: "Child123!",
+  database: "bamazon_db"
 });
 
-//connects to database
+// Creates the connection with the server and loads the manager menu upon a successful connection
 connection.connect(function(err) {
-    if (err) {
-      console.error("error connecting: " + err.stack);
-    }
-    loadManagerMenu();
+  if (err) {
+    console.error("error connecting: " + err.stack);
+  }
+  loadManagerMenu();
+});
+
+// Get product data from the database
+function loadManagerMenu() {
+  connection.query("SELECT * FROM products", function(err, res) {
+    if (err) throw err;
+
+    // Load the possible manager menu options, pass in the products data
+    loadManagerOptions(res);
   });
+}
 
 // Load the manager options and pass in the products data from the database
 function loadManagerOptions(products) {
