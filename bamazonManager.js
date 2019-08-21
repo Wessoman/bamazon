@@ -15,103 +15,187 @@ var connection = mysql.createConnection({
 
 //connects to database
 connection.connect(function(err) {
-    if (err) throw err;
-});
+    if (err) {
+      console.error("error connecting: " + err.stack);
+    }
+    loadManagerMenu();
+  });
 
-//initializes app
-initialize();
-
-// ========== FUNCTIONS =========== //
-
-function initialize() {
-    // create new table
-    var productTable = new Table({
-        head: ["Product Id", "Product Name", "Price"],
-        colWidths: [10, 40, 10]
-    });
-    // selects all data from products table
-    connection.query("SELECT * FROM products", function(err, res) {
-        if (err) throw err;
-        // logs info (ID, product, price) about all items for sale
-        console.log("ITEMS FOR SALE");
-        for (var i = 0; i < res.length; i++) {
-            // variables to store column data
-            var prodId = res[i].item_id;
-            var prodName = res[i].product_name;
-            var price = res[i].price;
-            // push column data into table for each product
-            productTable.push(
-                [prodId, prodName, price]
-            );
-        }
-        // print table to console
-        console.log(productTable.toString());
-        // runs function to purchase items
-        buyProduct();
+// Load the manager options and pass in the products data from the database
+function loadManagerOptions(products) {
+  inquirer
+    .prompt({
+      type: "list",
+      name: "choice",
+      choices: ["View Products for Sale", "View Low Inventory", "Add to Inventory", "Add New Product", "Quit"],
+      message: "What would you like to do?"
+    })
+    .then(function(val) {
+      switch (val.choice) {
+      case "View Products for Sale":
+        console.table(products);
+        loadManagerMenu();
+        break;
+      case "View Low Inventory":
+        loadLowInventory();
+        break;
+      case "Add to Inventory":
+        addToInventory(products);
+        break;
+      case "Add New Product":
+        promptManagerForNewProduct(products);
+        break;
+      default:
+        console.log("Goodbye!");
+        process.exit(0);
+        break;
+      }
     });
 }
 
-// function to purchase items
-function buyProduct() {
-    // prompts user for id and quantity of product they want to purchase
-    inquirer.prompt([{
-        name: "product_id",
-        message: "Enter the ID of the product you'd like to buy."
-    }, {
-        name: "quantity",
-        message: "How many of the product you selected would you like to buy?"
-    }]).then(function(answers) {
-        // selects quantity of item user specified in prompt above
-        connection.query("SELECT stock_quantity FROM products WHERE item_id = ?", [answers.product_id], function(err, res) {
-            // in the case where there is not enough in stock to fulfill purchase
-            if (answers.quantity > res[0].stock_quantity) {
-                console.log("Insufficient quantity!");
-                // restarts function to buy items
-                buyProduct();
-            } else {
-                // in the case where there is enough in stock to fulfill purchase
-                var newQty = res[0].stock_quantity - answers.quantity;
-                // select info from products about product specified by user
-                connection.query("SELECT * FROM products WHERE item_id = ?", [answers.product_id], function(err, res) {
-                    // set product, price, and sales equal to variables
-                    var prodSelected = res[0].product_name;
-                    var price = res[0].price;
-                    var prodSales = parseFloat(res[0].product_sales);
-                    var department = res[0].department_name;
-                    // total price is price of 1 item * quantity purchased
-                    var total = parseFloat(price * answers.quantity);
-                    // new product sales figure is old product sales plus new sales
-                    var newProdSales = prodSales + total;
-                    //update departments table with new product sales
-                    connection.query("SELECT total_sales FROM departments WHERE department_name = ?", [department], function(err, res) {
-                        // represents previous department sales
-                        var dptSales = parseFloat(res[0].total_sales);
-                        // adds new sale to previous department sales
-                        var newDptSales = dptSales + total;
-                        // updates total sales
-                        connection.query("UPDATE departments SET ? WHERE ?", [{
-                            total_sales: newDptSales
-                        }, {
-                            department_name: department
-                        }], function(err, res) {
-                            if (err) throw err;
-                        });
-                    });
-                    // update product table with new quantity and product sales
-                    connection.query("UPDATE products SET ? WHERE ?", [{
-                        stock_quantity: newQty,
-                        product_sales: newProdSales
-                    }, {
-                        item_id: answers.product_id
-                    }], function(err, res) {
-                        if (err) throw err;
-                        // let user know of their success in purchasing their items
-                        console.log("\nSuccess, you've purchased " + answers.quantity + " of " + prodSelected + " for the price of $" + total + ".\n");
-                        // restarts function to buy items
-                        initialize();
-                    });
-                });
-            }
-        });
+// Query the DB for low inventory products
+function loadLowInventory() {
+  // Selects all of the products that have a quantity of 5 or less
+  connection.query("SELECT * FROM products WHERE stock_quantity <= 5", function(err, res) {
+    if (err) throw err;
+    // Draw the table in the terminal using the response, load the manager menu
+    console.table(res);
+    loadManagerMenu();
+  });
+}
+
+// Prompt the manager for a product to replenish
+function addToInventory(inventory) {
+  console.table(inventory);
+  inquirer
+    .prompt([
+      {
+        type: "input",
+        name: "choice",
+        message: "What is the ID of the item you would you like add to?",
+        validate: function(val) {
+          return !isNaN(val);
+        }
+      }
+    ])
+    .then(function(val) {
+      var choiceId = parseInt(val.choice);
+      var product = checkInventory(choiceId, inventory);
+
+      // If a product can be found with the chose id...
+      if (product) {
+        // Pass the chosen product to promptCustomerForQuantity
+        promptManagerForQuantity(product);
+      }
+      else {
+        // Otherwise let the user know and re-load the manager menu
+        console.log("\nThat item is not in the inventory.");
+        loadManagerMenu();
+      }
     });
+}
+
+// Ask for the quantity that should be added to the chosen product
+function promptManagerForQuantity(product) {
+  inquirer
+    .prompt([
+      {
+        type: "input",
+        name: "quantity",
+        message: "How many would you like to add?",
+        validate: function(val) {
+          return val > 0;
+        }
+      }
+    ])
+    .then(function(val) {
+      var quantity = parseInt(val.quantity);
+      addQuantity(product, quantity);
+    });
+}
+
+// Updates quantity of selected product
+function addQuantity(product, quantity) {
+  connection.query(
+    "UPDATE products SET stock_quantity = ? WHERE item_id = ?",
+    [product.stock_quantity + quantity, product.item_id],
+    function(err, res) {
+      // Let the user know the purchase was successful, re-run loadProducts
+      console.log("\nSuccessfully added " + quantity + " " + product.product_name + "'s!\n");
+      loadManagerMenu();
+    }
+  );
+}
+
+// Asks the manager details about the new product
+// Adds new product to the db when complete
+function promptManagerForNewProduct(products) {
+  inquirer
+    .prompt([
+      {
+        type: "input",
+        name: "product_name",
+        message: "What is the name of the product you would like to add?"
+      },
+      {
+        type: "list",
+        name: "department_name",
+        choices: getDepartments(products),
+        message: "Which department does this product fall into?"
+      },
+      {
+        type: "input",
+        name: "price",
+        message: "How much does it cost?",
+        validate: function(val) {
+          return val > 0;
+        }
+      },
+      {
+        type: "input",
+        name: "quantity",
+        message: "How many do we have?",
+        validate: function(val) {
+          return !isNaN(val);
+        }
+      }
+    ])
+    .then(addNewProduct);
+}
+
+// Adds a new product to the database, loads the manager menu
+function addNewProduct(val) {
+  connection.query(
+    "INSERT INTO products (product_name, department_name, price, stock_quantity) VALUES (?, ?, ?, ?)",
+    [val.product_name, val.department_name, val.price, val.quantity],
+    function(err, res) {
+      if (err) throw err;
+      console.log(val.product_name + " ADDED TO BAMAZON!\n");
+      // When done, re run loadManagerMenu, effectively restarting our app
+      loadManagerMenu();
+    }
+  );
+}
+
+// Take an array of product objects, return an array of their unique departments
+function getDepartments(products) {
+  var departments = [];
+  for (var i = 0; i < products.length; i++) {
+    if (departments.indexOf(products[i].department_name) === -1) {
+      departments.push(products[i].department_name);
+    }
+  }
+  return departments;
+}
+
+// Check to see if the product the user chose exists in the inventory
+function checkInventory(choiceId, inventory) {
+  for (var i = 0; i < inventory.length; i++) {
+    if (inventory[i].item_id === choiceId) {
+      // If a matching product is found, return the product
+      return inventory[i];
+    }
+  }
+  // Otherwise return null
+  return null;
 }
